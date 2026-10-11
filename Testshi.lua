@@ -118,24 +118,27 @@ local function clearPriceData()
     table.clear(cleanNameCache)
 end
 
--- Новая функция для обработки формата shitaro.lol
+-- Новая функция: использует названия категорий из API как ключи
 local function processNewFormat(decoded)
-    local categoryMap = {
-        godlies = "godly",
-        chromas = "chroma",
-        ancients = "ancient",
-        uniques = "unique",
-        vintages = "vintage",
-        legendaries = "legendary",
-        rares = "rare",
-        uncommons = "uncommon",
-        commons = "common",
-        pets = "unknown",      -- Питомцы не имеют стандартной редкости в этом формате
-        misc = "unknown"       -- Разное тоже
+    -- Категории из API, которые содержат предметы с ценами
+    local validCategories = {
+        godlies = true,
+        chromas = true,
+        ancients = true,
+        uniques = true,
+        vintages = true,
+        legendaries = true,
+        rares = true,
+        uncommons = true,
+        commons = true,
+        pets = true,
+        misc = true
     }
 
     for categoryName, items in pairs(decoded.d) do
-        local rarityName = categoryMap[categoryName] or "unknown"
+        if not validCategories[categoryName] then
+            continue
+        end
         
         if type(items) == "table" then
             for _, itemData in ipairs(items) do
@@ -147,20 +150,18 @@ local function processNewFormat(decoded)
                     -- Пропускаем "Priceless", "N/A" и другие нечисловые значения
                     local numericPrice = tonumber(price)
                     if not numericPrice and type(price) == "string" then
-                        -- Пытаемся извлечь число из строки (например, "1000000")
                         numericPrice = tonumber(price:match("[%d%.]+"))
                     end
                     
                     if numericPrice then
-                        local combinedKey = name .. "_" .. rarityName
+                        -- Сохраняем под ключом "имя_категория" (например, travelersgun_godlies)
+                        local combinedKey = name .. "_" .. categoryName
                         itemPrices[combinedKey] = numericPrice
                         itemPricesLowerCase[combinedKey:lower()] = numericPrice
                         
-                        -- Также добавляем просто по имени, если редкость unknown
-                        if rarityName == "unknown" then
-                             itemPrices[name] = numericPrice
-                             itemPricesLowerCase[name:lower()] = numericPrice
-                        end
+                        -- Также сохраняем просто по имени (на случай, если редкость не определена)
+                        itemPrices[name] = numericPrice
+                        itemPricesLowerCase[name:lower()] = numericPrice
 
                         knownNames[name:lower()] = true
                         knownNames[cleanName(name):lower()] = true
@@ -209,7 +210,6 @@ loadPrices = function()
         return false, lastError or "Failed to load prices"
     end
 
-    -- Используем новую функцию обработки
     processNewFormat(decoded)
 
     pricesLoaded = true
@@ -276,22 +276,33 @@ valcalcSection:AddParagraph(
     "valcalc loads the latest MM2 item values from the configured price database and detects item names in trades, inventories, and profiles. When enabled, it displays the detected value on item slots and calculates offer totals. Use Refresh Currency Values to download the latest data. Disable Show Currency Values to stop displaying values."
 )
 
+-- Обновлённая функция: проверяет ключи с категориями из API
 local function getPrice(rawName, rarity)
     if type(rawName) ~= "string" or rawName == "" then return nil end
     local name = cleanName(rawName)
-    local checkKeys = {name .. "_" .. rarity, rawName .. "_" .. rarity, name .. "_unknown", name, rawName}
-
-    for _, key in ipairs(checkKeys) do
+    
+    -- Сначала пробуем ключ с определённой редкостью (из цвета)
+    local keyWithRarity = name .. "_" .. rarity
+    if itemPrices[keyWithRarity] ~= nil then return itemPrices[keyWithRarity] end
+    if itemPricesLowerCase[keyWithRarity:lower()] ~= nil then return itemPricesLowerCase[keyWithRarity:lower()] end
+    
+    -- Затем пробуем ключи с категориями из API
+    local categories = {"godlies", "chromas", "ancients", "uniques", "vintages", "legendaries", "rares", "uncommons", "commons", "pets", "misc"}
+    for _, cat in ipairs(categories) do
+        local key = name .. "_" .. cat
         if itemPrices[key] ~= nil then return itemPrices[key] end
         if itemPricesLowerCase[key:lower()] ~= nil then return itemPricesLowerCase[key:lower()] end
     end
     
-    local searchName = name:lower() .. "_"
-    for key, val in pairs(itemPricesLowerCase) do
-        if type(key) == "string" and string.sub(key, 1, #searchName) == searchName then
-            return val
-        end
-    end
+    -- Пробуем ключ "имя_unknown"
+    local keyUnknown = name .. "_unknown"
+    if itemPrices[keyUnknown] ~= nil then return itemPrices[keyUnknown] end
+    if itemPricesLowerCase[keyUnknown:lower()] ~= nil then return itemPricesLowerCase[keyUnknown:lower()] end
+    
+    -- И наконец, просто по имени
+    if itemPrices[name] ~= nil then return itemPrices[name] end
+    if itemPricesLowerCase[name:lower()] ~= nil then return itemPricesLowerCase[name:lower()] end
+    
     return nil
 end
 
@@ -408,7 +419,7 @@ task.spawn(function()
                                 local rarity = extractRarity(el)
                                 local cleanRaw = text:gsub("<[^>]+>", ""):match("^%s*(.-)%s*$") or text
                                 
-                                local price = getPrice(cleanRaw, rarity) or getPrice(cleanRaw, "unknown")
+                                local price = getPrice(cleanRaw, rarity)
                                 
                                 if price ~= nil then
                                     local slotFrame, slotContainer = findSlotData(el)
