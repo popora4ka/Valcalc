@@ -52,7 +52,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 -- === 1. PRICE DATABASE ===
-local PRICES_URL = "https://raw.githubusercontent.com/popora4ka/Values/refs/heads/main/prices.json"
+local PRICES_URL = "https://shitaro.lol/api/values.json"
 local itemPrices = {}
 local itemPricesLowerCase = {}
 local knownNames = {} 
@@ -251,7 +251,7 @@ end)
 
 valcalcSection:AddParagraph(
     "How it works",
-    "valcalc loads the latest MM2 item values from the configured price database and detects item names in trades, inventories, and profiles. When enabled, it displays the detected value on item slots and calculates offer totals. Use Refresh Currency Values to download the latest data. Disable Show Currency Values to stop displaying values."
+    "valcalc loads the latest MM2 item values from the configured price database and detects item names in trades, inventories, and profiles. When enabled, it displays the detected value on item slots and calculates offer totals. Use Refresh Currency Values to download the latest data. Disable Show Currency Values to stop displaying values (tysm shitaro dev for values link)"
 )
 
 local function getPrice(rawName, rarity)
